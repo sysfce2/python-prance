@@ -1,1 +1,1 @@
--e .[dev,ssv,osv,icu,cli]
+-e .[ssv,osv,icu,cli]

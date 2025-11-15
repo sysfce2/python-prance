@@ -1,1 +1,1 @@
--e .[dev,flex,icu]
+-e .[flex,icu]
