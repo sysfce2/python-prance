@@ -14,10 +14,16 @@ Fork, then clone the repo:
 Use [virtualenv](http://docs.python-guide.org/en/latest/dev/virtualenvs/)
 to create a virtual environment and change to it or not, as you see fit.
 
-Then install the requirements:
+Then install the package in editable mode with all extras and dev dependencies:
 
 ```bash
-$ pip install -r requirements.txt
+$ pip install --group dev -e .[ssv,osv,icu,cli]
+```
+
+Alternatively, use the minimal set of dependencies:
+
+```bash
+$ pip install --group dev -e .
 ```
 
 ## Documentation
@@ -25,7 +31,7 @@ $ pip install -r requirements.txt
 After setup, run the following to generate documentation:
 
 ```bash
-$ python setup.py build_sphinx
+$ sphinx-build -b html -d docs/build/doctrees docs/source docs/build/html
 ```
 
 ## Development
@@ -69,10 +75,11 @@ Run tests on multiple Python versions:
 $ tox
 ```
 
-Run tests on other Python versions:
+Run tests on specific Python versions:
 
 ```bash
-$ tox -e py34  # e.g.
+$ tox -e py310  # Python 3.10
+$ tox -e py314  # Python 3.14
 ```
 
 A simple test coverage report is automatically generated.
