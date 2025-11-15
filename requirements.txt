@@ -1,1 +1,0 @@
--e .[dev,ssv,osv,icu,cli]
