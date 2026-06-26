@@ -5,7 +5,24 @@ __copyright__ = "Copyright (c) 2016-2018 Jens Finkhaeuser"
 __license__ = "MIT"
 __all__ = ()
 
+import copy
+
 import prance.util.url as _url
+
+try:
+    import orjson as _orjson
+except ImportError:
+    _orjson = None
+
+
+def _deepcopy_specs(value):
+    if _orjson is not None:
+        try:
+            return _orjson.loads(_orjson.dumps(value))
+        except TypeError:
+            pass
+    return copy.deepcopy(value)
+
 
 #: Resolve internal references
 RESOLVE_INTERNAL = 2**1
@@ -78,9 +95,7 @@ class RefResolver:
         :param bool strict: [optional] Whether to use strict mode or not; in
             lenient mode, malformed keys will be silently rewritten.
         """
-        import copy
-
-        self.specs = copy.deepcopy(specs)
+        self.specs = _deepcopy_specs(specs)
         self.url = url
 
         self.__reclimit = options.get("recursion_limit", 1)
@@ -106,6 +121,7 @@ class RefResolver:
             self.parsed_url = self._url_key = None
 
         self.__soft_dereference_objs = {}
+        self.__resolved_cache: dict[tuple[str, tuple[str, ...]], object] = {}
 
     def resolve_references(self):
         """Resolve JSON pointers/references in the spec."""
@@ -216,14 +232,15 @@ class RefResolver:
         :return: A copy of the dereferenced value, with all internal references
             resolved.
         """
-        # In order to start dereferencing anything in the referenced URL, we have
-        # to read and parse it, of course.
+        cache_key = (_url.urlresource(ref_url), tuple(obj_path))
+
+        if cache_key in self.__resolved_cache:
+            return _deepcopy_specs(self.__resolved_cache[cache_key])
+
         contents = _url.fetch_url(
             ref_url, self.__reference_cache, self.__encoding, self.__strict
         )
 
-        # In this inner parser's specification, we can now look for the referenced
-        # object.
         value = contents
         if len(obj_path) != 0:
             from prance.util.path import path_get
@@ -235,16 +252,11 @@ class RefResolver:
                     f'Cannot resolve reference "{ref_url.geturl()}": {str(ex)}'
                 )
 
-        # Deep copy value; we don't want to create recursive structures
-        import copy
-
-        value = copy.deepcopy(value)
-
-        # Now resolve partial specs
+        value = _deepcopy_specs(value)
         value = self._resolve_partial(ref_url, value, recursions)
 
-        # That's it!
-        return value
+        self.__resolved_cache[cache_key] = value
+        return _deepcopy_specs(value)
 
     def _resolve_partial(self, base_url, partial, recursions):
         """

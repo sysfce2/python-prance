@@ -5,6 +5,8 @@ __copyright__ = "Copyright (c) 2016-2018 Jens Finkhaeuser"
 __license__ = "MIT"
 __all__ = ()
 
+_CONTAINER_TYPES = (dict, list, tuple)
+
 
 def item_iterator(value, path=()):
     """
@@ -72,12 +74,21 @@ def reference_iterator(specs, path=()):
     :return: An iterator over all references in the specs.
     :rtype: iterator
     """
-    # We need to iterate through the nested specification dict, so let's
-    # start with an appropriate iterator. We can immediately optimize it by
-    # only returning '$ref' items.
-    for item_path, item in item_iterator(specs, path):
-        if len(item_path) <= 0:
-            continue
-        key = item_path[-1]
-        if key == "$ref":
-            yield key, item, item_path[:-1]
+    stack = [(path, specs)]
+    while stack:
+        current_path, value = stack.pop()
+        vtype = type(value)
+        if vtype is dict:
+            children = []
+            for key, item in value.items():
+                if key == "$ref":
+                    yield "$ref", item, current_path
+                elif type(item) in _CONTAINER_TYPES:
+                    children.append((current_path + (key,), item))
+            stack.extend(reversed(children))
+        elif vtype is list or vtype is tuple:
+            children = []
+            for idx, item in enumerate(value):
+                if type(item) in _CONTAINER_TYPES:
+                    children.append((current_path + (idx,), item))
+            stack.extend(reversed(children))

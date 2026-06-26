@@ -5,6 +5,8 @@ __copyright__ = "Copyright (c) 2018 Jens Finkhaeuser"
 __license__ = "MIT"
 __all__ = ()
 
+_DICT_LIST = (dict, list)
+
 
 def _json_ref_escape(path):
     """JSON-reference escape object path."""
@@ -17,6 +19,14 @@ def _json_ref_escape(path):
 def _str_path(path):
     """Stringify object path."""
     return "/" + "/".join([_json_ref_escape(p) for p in path])
+
+
+def _value_or_default(obj, defaultvalue):
+    if obj is not None:
+        return obj
+    if defaultvalue is not None:
+        return defaultvalue
+    return obj
 
 
 def path_get(obj, path, defaultvalue=None, path_of_obj=()):
@@ -35,59 +45,96 @@ def path_get(obj, path, defaultvalue=None, path_of_obj=()):
     :param mixed defaultvalue: If the value at the path does not exist and this
       parameter is not None, it is returned. Otherwise an error is raised.
     """
-    from collections.abc import Mapping, Sequence
+    if path is None or len(path) == 0:
+        return _value_or_default(obj, defaultvalue)
 
-    # For error reporting.
-    path_of_obj_str = _str_path(path_of_obj)
+    for key in path:
+        if type(obj) not in _DICT_LIST:
+            return _path_get_abc(obj, path, defaultvalue, path_of_obj)
+        if type(obj) is dict:
+            if key not in obj:
+                raise KeyError(
+                    'Object at "{}" does not contain key: {}'.format(
+                        _str_path(path_of_obj), key
+                    )
+                )
+            path_of_obj = path_of_obj + (key,)
+            obj = obj[key]
+        else:
+            try:
+                idx = int(key)
+            except (ValueError, TypeError):
+                raise KeyError(
+                    'Sequence at "%s" needs integer indices only, but got: %s'
+                    % (_str_path(path_of_obj), key)
+                )
+            if idx < 0 or idx >= len(obj):
+                raise IndexError(
+                    'Index out of bounds for sequence at "%s": %d'
+                    % (_str_path(path_of_obj), idx)
+                )
+            path_of_obj = path_of_obj + (key,)
+            obj = obj[idx]
+
+    return _value_or_default(obj, defaultvalue)
+
+
+def _path_get_abc(obj, path, defaultvalue=None, path_of_obj=()):
+    """Fallback path_get for non-dict/list types using ABC checks."""
+    from collections.abc import Mapping, Sequence
 
     if path is not None and not isinstance(path, Sequence):
         raise TypeError(f"Path is a {type(path)}, but must be None or a Collection!")
 
     if isinstance(obj, Mapping):
         if path is None or len(path) < 1:
-            return obj or defaultvalue
-
+            return _value_or_default(obj, defaultvalue)
         if path[0] not in obj:
             raise KeyError(
                 'Object at "{}" does not contain key: {}'.format(
-                    path_of_obj_str, path[0]
+                    _str_path(path_of_obj), path[0]
                 )
             )
-
-        return path_get(
-            obj[path[0]], path[1:], defaultvalue, path_of_obj=path_of_obj + (path[0],)
+        return _path_get_abc(
+            obj[path[0]], path[1:], defaultvalue, path_of_obj + (path[0],)
         )
-
     elif isinstance(obj, Sequence):
         if path is None or len(path) < 1:
-            return obj or defaultvalue
-
+            return _value_or_default(obj, defaultvalue)
         try:
             idx = int(path[0])
         except ValueError:
             raise KeyError(
-                'Sequence at "%s" needs integer indices only, but got: '
-                "%s"
-                % (
-                    path_of_obj_str,
-                    path[0],
-                )
+                'Sequence at "%s" needs integer indices only, but got: %s'
+                % (_str_path(path_of_obj), path[0])
             )
-
         if idx < 0 or idx >= len(obj):
             raise IndexError(
-                'Index out of bounds for sequence at "%s": %d' % (path_of_obj_str, idx)
+                'Index out of bounds for sequence at "%s": %d'
+                % (_str_path(path_of_obj), idx)
             )
-
-        return path_get(
-            obj[idx], path[1:], defaultvalue, path_of_obj=path_of_obj + (path[0],)
+        return _path_get_abc(
+            obj[idx], path[1:], defaultvalue, path_of_obj + (path[0],)
         )
-
     else:
-        # Path must be empty.
         if path is not None and len(path) > 0:
             raise TypeError(f"Cannot get anything from type {type(obj)}!")
-        return obj or defaultvalue
+        return _value_or_default(obj, defaultvalue)
+
+
+def _fill_sequence(seq, index, path, path_index):
+    """Fill a list with None until *index* is reachable, then append a typed placeholder."""
+    if len(seq) > index:
+        return
+    while len(seq) < index:
+        seq.append(None)
+    next_index = path_index + 1
+    if next_index < len(path) and type(path[next_index]) is int:
+        seq.append([])
+    elif next_index >= len(path):
+        seq.append(None)
+    else:
+        seq.append({})
 
 
 def path_set(obj, path, value, **options):
@@ -105,47 +152,58 @@ def path_set(obj, path, value, **options):
     :param bool create: [optional] Flag indicating whether to create
       intermediate values or not. Defaults to False.
     """
-    # Retrieve options
     create = options.get("create", False)
 
-    def fill_sequence(seq, index, value_index_type):
-        """
-        Fill the sequence seq with elements until index can be accessed.
+    if len(path) < 1:
+        raise KeyError("Cannot set with an empty path!")
 
-        Fills with None except for the indexed element. That is either a dict or
-        a list, depending on the value_index_type. If the latter is an int, a
-        list is added. If the latter is None (unknown), None is added. Otherwise
-        a dict is added.
-        """
-        if len(seq) > index:
-            return
+    root = obj
+    last = len(path) - 1
 
-        while len(seq) < index:
-            seq.append(None)
-
-        if value_index_type == int:
-            seq.append([])
-        elif value_index_type is None:
-            seq.append(None)
+    for i in range(last):
+        key = path[i]
+        if type(obj) not in _DICT_LIST:
+            return _path_set_abc(root, path, value, create=create)
+        if type(obj) is dict:
+            if key not in obj:
+                if not create:
+                    raise KeyError(f'Key "{key}" not in Mapping!')
+                next_key = path[i + 1]
+                obj[key] = [] if type(next_key) is int else {}
+            obj = obj[key]
         else:
-            seq.append({})
+            try:
+                idx = int(key)
+            except (ValueError, TypeError):
+                raise KeyError("Sequences need integer indices only.")
+            if create:
+                _fill_sequence(obj, idx, path, i)
+                if obj[idx] is None:
+                    next_key = path[i + 1]
+                    obj[idx] = [] if type(next_key) is int else {}
+            obj = obj[idx]
 
-    def safe_idx(seq, index):
-        """
-        Safely index a sequence.
-
-        Much like dict.get with default value, except returns None instead of
-        raising IndexError.
-        """
+    final = path[last]
+    if type(obj) not in _DICT_LIST:
+        return _path_set_abc(root, path, value, create=create)
+    if type(obj) is dict:
+        if not create and final not in obj:
+            raise KeyError(f'Key "{final}" not in Mapping!')
+        obj[final] = value
+    else:
         try:
-            return type(seq[index])
-        except IndexError:
-            return None
+            idx = int(final)
+        except (ValueError, TypeError):
+            raise KeyError("Sequences need integer indices only.")
+        if create:
+            _fill_sequence(obj, idx, path, last)
+        obj[idx] = value
 
-    # print('obj', obj, type(obj))
-    # print('path', path)
-    # print('value', value)
+    return root
 
+
+def _path_set_abc(obj, path, value, create=False):
+    """Fallback path_set for non-dict/list types using ABC checks."""
     from collections.abc import Sequence, MutableSequence, Mapping, MutableMapping
 
     if path is not None and not isinstance(path, Sequence):
@@ -155,16 +213,10 @@ def path_set(obj, path, value, **options):
         raise KeyError("Cannot set with an empty path!")
 
     if isinstance(obj, Mapping):
-        # If we don't have a mutable mapping, we should raise a TypeError
         if not isinstance(obj, MutableMapping):  # pragma: nocover
             raise TypeError(f"Mapping is not mutable: {type(obj)}")
-
-        # If the path has only one element, we just overwrite the element at the
-        # given key. Otherwise we recurse.
         if len(path) == 1:
             if not create and path[0] not in obj:
-                # dicts would normally silently create, but we have to make it
-                # explicit to fulfil our contract.
                 raise KeyError(f'Key "{path[0]}" not in Mapping!')
             obj[path[0]] = value
         else:
@@ -173,36 +225,22 @@ def path_set(obj, path, value, **options):
                     obj[path[0]] = []
                 else:
                     obj[path[0]] = {}
-            path_set(obj[path[0]], path[1:], value, create=create)
-
+            _path_set_abc(obj[path[0]], path[1:], value, create=create)
         return obj
 
     elif isinstance(obj, Sequence):
-        idx = path[0]
-
-        # If we don't have a mutable sequence, we should raise a TypeError
         if not isinstance(obj, MutableSequence):
             raise TypeError(f"Sequence is not mutable: {type(obj)}")
-
-        # Ensure integer indices
         try:
-            idx = int(idx)
+            idx = int(path[0])
         except ValueError:
             raise KeyError("Sequences need integer indices only.")
-
-        # If we're supposed to create and the index at path[0] doesn't exist,
-        # then we need to push some dummy objects.
         if create:
-            fill_sequence(obj, idx, safe_idx(path, 1))
-
-        # If the path has only one element, we just overwrite the element at the
-        # given index. Otherwise we recurse.
-        # print('pl', len(path))
+            _fill_sequence(obj, idx, path, 0)
         if len(path) == 1:
             obj[idx] = value
         else:
-            path_set(obj[idx], path[1:], value, create=create)
-
+            _path_set_abc(obj[idx], path[1:], value, create=create)
         return obj
     else:
         raise TypeError(f"Cannot set anything on type {type(obj)}!")
