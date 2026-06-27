@@ -113,9 +113,7 @@ def _path_get_abc(obj, path, defaultvalue=None, path_of_obj=()):
                 'Index out of bounds for sequence at "%s": %d'
                 % (_str_path(path_of_obj), idx)
             )
-        return _path_get_abc(
-            obj[idx], path[1:], defaultvalue, path_of_obj + (path[0],)
-        )
+        return _path_get_abc(obj[idx], path[1:], defaultvalue, path_of_obj + (path[0],))
     else:
         if path is not None and len(path) > 0:
             raise TypeError(f"Cannot get anything from type {type(obj)}!")
