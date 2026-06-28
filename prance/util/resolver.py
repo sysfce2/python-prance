@@ -51,6 +51,15 @@ TRANSLATE_DEFAULT = 1
 RESOLVE_ALL = RESOLVE_INTERNAL | RESOLVE_HTTP | RESOLVE_FILES
 
 
+class _KeepRef:
+    """Sentinel returned by recursion-limit handlers to leave the $ref in place."""
+
+    __slots__ = ()
+
+
+KEEP_REF = _KeepRef()
+
+
 def default_reclimit_handler(limit, parsed_url, recursions=()):
     """Raise prance.util.url.ResolutionError."""
     path = []
@@ -62,6 +71,11 @@ def default_reclimit_handler(limit, parsed_url, recursions=()):
         "Recursion reached limit of %d trying to "
         'resolve "%s"!\n%s' % (limit, parsed_url.geturl(), path)
     )
+
+
+def keep_ref_on_recursion(limit, parsed_url, recursions=()):
+    """Leave the ``$ref`` in place when the recursion limit is reached."""
+    return KEEP_REF
 
 
 class RefResolver:
@@ -193,20 +207,17 @@ class RefResolver:
             next_recursions = recursions + (ref_path,)
 
             if rec_counter[ref_path] >= self.__reclimit:
-                # The referenced value may be produced by the handler, or the handler
-                # may raise, etc.
                 ref_value = self.__reclimit_handler(
                     self.__reclimit, ref_url, next_recursions
                 )
+                if isinstance(ref_value, _KeepRef):
+                    continue
             else:
-                # The referenced value is to be used, but let's copy it to avoid
-                # building recursive structures.
                 ref_value = self._dereference(ref_url, obj_path, next_recursions)
 
             # Full item path
             full_path = path + item_path
 
-            # First yield parent
             if translate:
                 url = self._collect_soft_refs(ref_url, obj_path, ref_value)
                 yield full_path, {"$ref": "#/components/schemas/" + url}
