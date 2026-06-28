@@ -121,7 +121,7 @@ def _path_get_abc(obj, path, defaultvalue=None, path_of_obj=()):
 
 
 def _fill_sequence(seq, index, path, path_index):
-    """Fill a list with None until *index* is reachable, then append a typed placeholder."""
+    """Fill list with None until *index* is reachable, then append typed placeholder."""
     if len(seq) > index:
         return
     while len(seq) < index:
