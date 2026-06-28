@@ -303,13 +303,14 @@ class ResolvingParser(BaseParser):
         forward_args = {
             k: v for (k, v) in self.options.items() if k in forward_arg_names
         }
+        materialize = self.options.get("materialize", False)
         resolver = RefResolver(
             self.specification,
             self.url,
             reference_cache=self.__reference_cache,
             **forward_args,
         )
-        resolver.resolve_references()
+        resolver.resolve_references(materialize=materialize)
         self.specification = resolver.specs
 
         # Now validate - the BaseParser knows the specifics

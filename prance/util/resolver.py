@@ -24,6 +24,17 @@ def _deepcopy_specs(value):
     return copy.deepcopy(value)
 
 
+def _replace_at_path(obj: dict | list, path: tuple, value: object) -> None:
+    """Navigate to path's parent in obj and replace the final key with value."""
+    for key in path[:-1]:
+        obj = obj[key] if type(obj) is dict else obj[int(key)]
+    final = path[-1]
+    if type(obj) is dict:
+        obj[final] = value
+    else:
+        obj[int(final)] = value
+
+
 #: Resolve internal references
 RESOLVE_INTERNAL = 2**1
 #: Resolve references to HTTP external files.
@@ -123,8 +134,16 @@ class RefResolver:
         self.__soft_dereference_objs = {}
         self.__resolved_cache: dict[tuple[str, tuple[str, ...]], object] = {}
 
-    def resolve_references(self):
-        """Resolve JSON pointers/references in the spec."""
+    def resolve_references(self, *, materialize: bool = False):
+        """Resolve JSON pointers/references in the spec.
+
+        :param bool materialize: If True, deep-copy the final result so that
+            every resolved subtree is an independent object.  The default
+            (False) uses structural sharing — subtrees that originated from
+            the same ``$ref`` target are the *same* Python object.  This is
+            safe for serialization and read-only traversal, but mutations to
+            a shared subtree will be visible everywhere it appears.
+        """
         self.specs = self._resolve_partial(self.parsed_url, self.specs, ())
 
         # If there are any objects collected when using TRANSLATE_EXTERNAL, add
@@ -136,6 +155,9 @@ class RefResolver:
                 self.specs["components"].update({"schemas": {}})
 
             self.specs["components"]["schemas"].update(self.__soft_dereference_objs)
+
+        if materialize:
+            self.specs = _deepcopy_specs(self.specs)
 
     def _dereferencing_iterator(self, base_url, partial, path, recursions):
         """
@@ -224,18 +246,20 @@ class RefResolver:
         """
         Dereference the URL and object path.
 
-        Returns the dereferenced object.
+        Returns the dereferenced object. The returned value is a shared
+        reference from an internal cache — callers must not mutate it.
+        This structural sharing makes resolution O(N) instead of O(N^2)
+        for chained references.
 
         :param mixed ref_url: The URL at which the reference is located.
         :param list obj_path: The object path within the URL resource.
         :param tuple recursions: A recursion stack for resolving references.
-        :return: A copy of the dereferenced value, with all internal references
-            resolved.
+        :return: The resolved value (shared reference, do not mutate).
         """
         cache_key = (_url.urlresource(ref_url), tuple(obj_path))
 
         if cache_key in self.__resolved_cache:
-            return _deepcopy_specs(self.__resolved_cache[cache_key])
+            return self.__resolved_cache[cache_key]
 
         contents = _url.fetch_url(
             ref_url, self.__reference_cache, self.__encoding, self.__strict
@@ -256,34 +280,35 @@ class RefResolver:
         value = self._resolve_partial(ref_url, value, recursions)
 
         self.__resolved_cache[cache_key] = value
-        return _deepcopy_specs(value)
+        return value
 
     def _resolve_partial(self, base_url, partial, recursions):
         """
         Resolve a (partial) spec's references.
+
+        Collects all ref substitutions first (since resolving one ref may
+        discover nested refs), then applies them shortest-path-first so
+        that parent replacements happen before children.
 
         :param mixed base_url: URL that the partial specs is located at.
         :param dict partial: The partial specs to work on.
         :param tuple recursions: A recursion stack for resolving references.
         :return: The partial with all references resolved.
         """
-        # Gather changes from the dereferencing iterator - we need to set new
-        # values from the outside in, so we have to post-process this a little,
-        # sorting paths by path length.
         changes = dict(
             tuple(self._dereferencing_iterator(base_url, partial, (), recursions))
         )
 
-        paths = sorted(changes.keys(), key=len)
+        if not changes:
+            return partial
 
-        # With the paths sorted, set them to the resolved values.
-        from prance.util.path import path_set
+        paths = sorted(changes.keys(), key=len)
 
         for path in paths:
             value = changes[path]
             if len(path) == 0:
                 partial = value
             else:
-                path_set(partial, list(path), value, create=True)
+                _replace_at_path(partial, path, value)
 
         return partial
