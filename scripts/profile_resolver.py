@@ -114,6 +114,100 @@ def profile_resolve(spec: dict, url: str, label: str) -> None:
     stats.print_callers(10)
 
 
+def make_deep_linear_spec(depth: int = 500) -> dict:
+    """Spec with a single linear $ref chain of *depth* hops (no cycles)."""
+    schemas: dict[str, object] = {}
+    for i in range(depth):
+        schemas[f"S{i}"] = {"$ref": f"#/definitions/S{i + 1}"}
+    schemas[f"S{depth}"] = {"type": "string"}
+    return {
+        "swagger": "2.0",
+        "info": {"title": "Test", "version": "1.0"},
+        "basePath": "/",
+        "paths": {
+            "/start": {
+                "get": {"responses": {"200": {"schema": {"$ref": "#/definitions/S0"}}}}
+            }
+        },
+        "definitions": schemas,
+    }
+
+
+def make_recursive_spec() -> dict:
+    """Spec with a two-node cycle: A -> B -> A."""
+    return {
+        "swagger": "2.0",
+        "info": {"title": "Test", "version": "1.0"},
+        "basePath": "/",
+        "paths": {
+            "/start": {
+                "get": {"responses": {"200": {"schema": {"$ref": "#/definitions/A"}}}}
+            }
+        },
+        "definitions": {
+            "A": {
+                "type": "object",
+                "properties": {"b": {"$ref": "#/definitions/B"}},
+            },
+            "B": {
+                "type": "object",
+                "properties": {"a": {"$ref": "#/definitions/A"}},
+            },
+        },
+    }
+
+
+def stress_deep_chains(url: str) -> None:
+    """Test resolver robustness on deeply nested linear $ref chains."""
+    print("\n=== Stress: deep linear $ref chains ===\n")
+    print(f"{'depth':>8}  {'time_ms':>10}  {'status':>20}")
+    print("-" * 44)
+
+    for depth in (50, 100, 250, 500, 1000, 2000, 5000):
+        spec = make_deep_linear_spec(depth)
+        try:
+            t0 = time.perf_counter()
+            r = RefResolver(spec, url)
+            r.resolve_references()
+            elapsed = time.perf_counter() - t0
+            print(f"{depth:>8}  {elapsed*1000:>10.1f}  {'OK':>20}")
+        except RecursionError:
+            print(f"{depth:>8}  {'—':>10}  {'RecursionError':>20}")
+        except Exception as e:
+            name = type(e).__name__
+            print(f"{depth:>8}  {'—':>10}  {name:>20}")
+        sys.stdout.flush()
+
+
+def stress_recursive_refs(url: str) -> None:
+    """Test resolver behaviour on cyclic schemas with various recursion_limit values."""
+    from prance.util.resolver import keep_ref_on_recursion
+
+    print("\n=== Stress: cyclic $ref (A->B->A) with increasing recursion_limit ===\n")
+    print(f"{'reclimit':>10}  {'time_ms':>10}  {'status':>20}")
+    print("-" * 46)
+
+    for limit in (1, 5, 50, 200, 500, 1000):
+        spec = make_recursive_spec()
+        try:
+            t0 = time.perf_counter()
+            r = RefResolver(
+                spec,
+                url,
+                recursion_limit=limit,
+                recursion_limit_handler=keep_ref_on_recursion,
+            )
+            r.resolve_references()
+            elapsed = time.perf_counter() - t0
+            print(f"{limit:>10}  {elapsed*1000:>10.1f}  {'OK':>20}")
+        except RecursionError:
+            print(f"{limit:>10}  {'—':>10}  {'RecursionError':>20}")
+        except Exception as e:
+            name = type(e).__name__
+            print(f"{limit:>10}  {'—':>10}  {name:>20}")
+        sys.stdout.flush()
+
+
 def main() -> None:
     """Run scaling tests and cProfile on various spec shapes."""
     url = "file:///tmp/test.json"
@@ -171,6 +265,10 @@ def main() -> None:
 
     # --- Phase 5: cProfile the flat spec ---
     profile_resolve(make_flat_spec(100), url, "flat spec (100 models)")
+
+    # --- Phase 6: Stress tests for deep hierarchies ---
+    stress_deep_chains(url)
+    stress_recursive_refs(url)
 
 
 if __name__ == "__main__":
