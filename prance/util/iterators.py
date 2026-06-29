@@ -5,8 +5,6 @@ __copyright__ = "Copyright (c) 2016-2018 Jens Finkhaeuser"
 __license__ = "MIT"
 __all__ = ()
 
-_CONTAINER_TYPES = (dict, list, tuple)
-
 
 def item_iterator(value, path=()):
     """
@@ -62,6 +60,9 @@ def reference_iterator(specs, path=()):
     """
     Iterate through the given specs, returning only references.
 
+    Uses ``isinstance`` so that dict/list subclasses (e.g. ruamel.yaml's
+    ``CommentedMap``/``CommentedSeq``) are handled correctly.
+
     The iterator returns three values:
       - The key, mimicking the behaviour of other iterators, although
         it will always equal '$ref'
@@ -77,18 +78,17 @@ def reference_iterator(specs, path=()):
     stack = [(path, specs)]
     while stack:
         current_path, value = stack.pop()
-        vtype = type(value)
-        if vtype is dict:
+        if isinstance(value, dict):
             children = []
             for key, item in value.items():
                 if key == "$ref":
                     yield "$ref", item, current_path
-                elif type(item) in _CONTAINER_TYPES:
+                elif isinstance(item, (dict, list, tuple)):
                     children.append((current_path + (key,), item))
             stack.extend(reversed(children))
-        elif vtype is list or vtype is tuple:
+        elif isinstance(value, (list, tuple)):
             children = []
             for idx, item in enumerate(value):
-                if type(item) in _CONTAINER_TYPES:
+                if isinstance(item, (dict, list, tuple)):
                     children.append((current_path + (idx,), item))
             stack.extend(reversed(children))

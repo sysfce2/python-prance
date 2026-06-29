@@ -1,4 +1,40 @@
-"""This submodule contains a JSON inlining reference resolver."""
+"""JSON ``$ref`` resolver with structural sharing.
+
+Resolving ``$ref`` pointers replaces each reference node with the
+referenced subtree.  A naive approach deep-copies every resolved
+target, which makes resolution O(N^2) for chains of references.
+
+This module instead uses **structural sharing**: the resolved value
+for each unique ``(URL, JSON-pointer)`` pair is cached and the
+*same Python object* is inserted at every site that references it.
+This makes resolution O(N) — each target is resolved and copied
+exactly once, regardless of how many places reference it.
+
+.. rubric:: Implications for consumers
+
+**Safe without changes**
+
+* Serialising the spec to JSON / YAML — identical subtrees simply
+  get written out multiple times.
+* Read-only traversal and validation.
+* Any code that does not mutate the resolved spec in place.
+
+**Requires care**
+
+If you mutate a resolved subtree (e.g. inject vendor extensions,
+strip fields for code generation), every other location that
+shares the same object will see those changes.  Two strategies
+exist:
+
+1. **Opt-in deep copy** — pass ``materialize=True`` to
+   ``resolve_references()`` (or set ``materialize: True`` in the
+   parser options).  This performs a single full deep copy *after*
+   resolution, breaking all sharing.
+
+2. **Copy-on-write at the call site** — deep-copy only the parts
+   you intend to mutate.  This is more efficient when you only
+   touch a small part of a large spec.
+"""
 
 __author__ = "Jens Finkhaeuser"
 __copyright__ = "Copyright (c) 2016-2018 Jens Finkhaeuser"
@@ -27,9 +63,9 @@ def _deepcopy_specs(value):
 def _replace_at_path(obj: dict | list, path: tuple, value: object) -> None:
     """Navigate to path's parent in obj and replace the final key with value."""
     for key in path[:-1]:
-        obj = obj[key] if type(obj) is dict else obj[int(key)]
+        obj = obj[key] if isinstance(obj, dict) else obj[int(key)]
     final = path[-1]
-    if type(obj) is dict:
+    if isinstance(obj, dict):
         obj[final] = value
     else:
         obj[int(final)] = value
@@ -151,12 +187,25 @@ class RefResolver:
     def resolve_references(self, *, materialize: bool = False):
         """Resolve JSON pointers/references in the spec.
 
-        :param bool materialize: If True, deep-copy the final result so that
-            every resolved subtree is an independent object.  The default
-            (False) uses structural sharing — subtrees that originated from
-            the same ``$ref`` target are the *same* Python object.  This is
-            safe for serialization and read-only traversal, but mutations to
-            a shared subtree will be visible everywhere it appears.
+        After this call, ``self.specs`` contains the fully-resolved spec
+        tree.  Resolved subtrees that originate from the same ``$ref``
+        target are the **same Python object** (structural sharing).
+
+        :param bool materialize: If ``True``, perform a final deep copy
+            of the entire spec, producing an independent object tree where
+            no two nodes share identity.  Use this when downstream code
+            mutates the resolved spec in place — without it, mutating one
+            shared subtree will affect every location that references the
+            same target.  The default (``False``) is appropriate for
+            serialization, validation, and read-only access.
+
+        .. note::
+
+            Structural sharing turns resolution from O(N^2) to O(N) for
+            chained references, because each target is resolved and deep-
+            copied exactly once.  Passing ``materialize=True`` adds one
+            additional O(N) deep copy at the end, which is still
+            dramatically faster than the old per-reference copying.
         """
         self.specs = self._resolve_partial(self.parsed_url, self.specs, ())
 

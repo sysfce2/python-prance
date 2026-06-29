@@ -5,8 +5,6 @@ __copyright__ = "Copyright (c) 2018 Jens Finkhaeuser"
 __license__ = "MIT"
 __all__ = ()
 
-_DICT_LIST = (dict, list)
-
 
 def _json_ref_escape(path):
     """JSON-reference escape object path."""
@@ -21,12 +19,63 @@ def _str_path(path):
     return "/" + "/".join([_json_ref_escape(p) for p in path])
 
 
-def _value_or_default(obj, defaultvalue):
-    if obj is not None:
-        return obj
-    if defaultvalue is not None:
-        return defaultvalue
-    return obj
+def _step_get(obj, key, path_of_obj):
+    """Descend one level into *obj* by *key*, raising on errors.
+
+    Handles dict/list subclasses (e.g. ruamel.yaml CommentedMap/Seq)
+    via ``isinstance``, and falls back to ABC checks for exotic types.
+    """
+    if isinstance(obj, dict):
+        if key not in obj:
+            raise KeyError(
+                'Object at "{}" does not contain key: {}'.format(
+                    _str_path(path_of_obj), key
+                )
+            )
+        return obj[key]
+
+    if isinstance(obj, (list, tuple)):
+        try:
+            idx = int(key)
+        except (ValueError, TypeError):
+            raise KeyError(
+                'Sequence at "%s" needs integer indices only, but got: %s'
+                % (_str_path(path_of_obj), key)
+            )
+        if idx < 0 or idx >= len(obj):
+            raise IndexError(
+                'Index out of bounds for sequence at "%s": %d'
+                % (_str_path(path_of_obj), idx)
+            )
+        return obj[idx]
+
+    from collections.abc import Mapping, Sequence
+
+    if isinstance(obj, Mapping):
+        if key not in obj:
+            raise KeyError(
+                'Object at "{}" does not contain key: {}'.format(
+                    _str_path(path_of_obj), key
+                )
+            )
+        return obj[key]
+
+    if isinstance(obj, Sequence) and not isinstance(obj, str):
+        try:
+            idx = int(key)
+        except (ValueError, TypeError):
+            raise KeyError(
+                'Sequence at "%s" needs integer indices only, but got: %s'
+                % (_str_path(path_of_obj), key)
+            )
+        if idx < 0 or idx >= len(obj):
+            raise IndexError(
+                'Index out of bounds for sequence at "%s": %d'
+                % (_str_path(path_of_obj), idx)
+            )
+        return obj[idx]
+
+    raise TypeError(f"Cannot get anything from type {type(obj)}!")
 
 
 def path_get(obj, path, defaultvalue=None, path_of_obj=()):
@@ -46,78 +95,13 @@ def path_get(obj, path, defaultvalue=None, path_of_obj=()):
       parameter is not None, it is returned. Otherwise an error is raised.
     """
     if path is None or len(path) == 0:
-        return _value_or_default(obj, defaultvalue)
+        return obj if obj is not None else defaultvalue
 
     for key in path:
-        if type(obj) not in _DICT_LIST:
-            return _path_get_abc(obj, path, defaultvalue, path_of_obj)
-        if type(obj) is dict:
-            if key not in obj:
-                raise KeyError(
-                    'Object at "{}" does not contain key: {}'.format(
-                        _str_path(path_of_obj), key
-                    )
-                )
-            path_of_obj = path_of_obj + (key,)
-            obj = obj[key]
-        else:
-            try:
-                idx = int(key)
-            except (ValueError, TypeError):
-                raise KeyError(
-                    'Sequence at "%s" needs integer indices only, but got: %s'
-                    % (_str_path(path_of_obj), key)
-                )
-            if idx < 0 or idx >= len(obj):
-                raise IndexError(
-                    'Index out of bounds for sequence at "%s": %d'
-                    % (_str_path(path_of_obj), idx)
-                )
-            path_of_obj = path_of_obj + (key,)
-            obj = obj[idx]
+        obj = _step_get(obj, key, path_of_obj)
+        path_of_obj = path_of_obj + (key,)
 
-    return _value_or_default(obj, defaultvalue)
-
-
-def _path_get_abc(obj, path, defaultvalue=None, path_of_obj=()):
-    """Fallback path_get for non-dict/list types using ABC checks."""
-    from collections.abc import Mapping, Sequence
-
-    if path is not None and not isinstance(path, Sequence):
-        raise TypeError(f"Path is a {type(path)}, but must be None or a Collection!")
-
-    if isinstance(obj, Mapping):
-        if path is None or len(path) < 1:
-            return _value_or_default(obj, defaultvalue)
-        if path[0] not in obj:
-            raise KeyError(
-                'Object at "{}" does not contain key: {}'.format(
-                    _str_path(path_of_obj), path[0]
-                )
-            )
-        return _path_get_abc(
-            obj[path[0]], path[1:], defaultvalue, path_of_obj + (path[0],)
-        )
-    elif isinstance(obj, Sequence):
-        if path is None or len(path) < 1:
-            return _value_or_default(obj, defaultvalue)
-        try:
-            idx = int(path[0])
-        except ValueError:
-            raise KeyError(
-                'Sequence at "%s" needs integer indices only, but got: %s'
-                % (_str_path(path_of_obj), path[0])
-            )
-        if idx < 0 or idx >= len(obj):
-            raise IndexError(
-                'Index out of bounds for sequence at "%s": %d'
-                % (_str_path(path_of_obj), idx)
-            )
-        return _path_get_abc(obj[idx], path[1:], defaultvalue, path_of_obj + (path[0],))
-    else:
-        if path is not None and len(path) > 0:
-            raise TypeError(f"Cannot get anything from type {type(obj)}!")
-        return _value_or_default(obj, defaultvalue)
+    return obj if obj is not None else defaultvalue
 
 
 def _fill_sequence(seq, index, path, path_index):
@@ -127,12 +111,106 @@ def _fill_sequence(seq, index, path, path_index):
     while len(seq) < index:
         seq.append(None)
     next_index = path_index + 1
-    if next_index < len(path) and type(path[next_index]) is int:
+    if next_index < len(path) and isinstance(path[next_index], int):
         seq.append([])
     elif next_index >= len(path):
         seq.append(None)
     else:
         seq.append({})
+
+
+def _step_set_descend(obj, key, path, i, create):
+    """Descend one level into *obj* for path_set, creating intermediates if needed.
+
+    Returns the child container to continue traversal into.
+    """
+    from collections.abc import Mapping, MutableMapping, Sequence, MutableSequence
+
+    if isinstance(obj, dict):
+        if key not in obj:
+            if not create:
+                raise KeyError(f'Key "{key}" not in Mapping!')
+            next_key = path[i + 1]
+            obj[key] = [] if isinstance(next_key, int) else {}
+        return obj[key]
+
+    if isinstance(obj, list):
+        try:
+            idx = int(key)
+        except (ValueError, TypeError):
+            raise KeyError("Sequences need integer indices only.")
+        if create:
+            _fill_sequence(obj, idx, path, i)
+            if obj[idx] is None:
+                next_key = path[i + 1]
+                obj[idx] = [] if isinstance(next_key, int) else {}
+        return obj[idx]
+
+    if isinstance(obj, Mapping):
+        if not isinstance(obj, MutableMapping):  # pragma: nocover
+            raise TypeError(f"Mapping is not mutable: {type(obj)}")
+        if key not in obj:
+            if not create:
+                raise KeyError(f'Key "{key}" not in Mapping!')
+            next_key = path[i + 1]
+            obj[key] = [] if isinstance(next_key, int) else {}
+        return obj[key]
+
+    if isinstance(obj, Sequence) and not isinstance(obj, str):
+        if not isinstance(obj, MutableSequence):
+            raise TypeError(f"Sequence is not mutable: {type(obj)}")
+        try:
+            idx = int(key)
+        except (ValueError, TypeError):
+            raise KeyError("Sequences need integer indices only.")
+        if create:
+            _fill_sequence(obj, idx, path, i)
+        return obj[idx]
+
+    raise TypeError(f"Cannot set anything on type {type(obj)}!")
+
+
+def _step_set_final(obj, key, value, path, path_index, create):
+    """Set the final key in *obj* to *value*."""
+    from collections.abc import Mapping, MutableMapping, Sequence, MutableSequence
+
+    if isinstance(obj, dict):
+        if not create and key not in obj:
+            raise KeyError(f'Key "{key}" not in Mapping!')
+        obj[key] = value
+        return
+
+    if isinstance(obj, list):
+        try:
+            idx = int(key)
+        except (ValueError, TypeError):
+            raise KeyError("Sequences need integer indices only.")
+        if create:
+            _fill_sequence(obj, idx, path, path_index)
+        obj[idx] = value
+        return
+
+    if isinstance(obj, Mapping):
+        if not isinstance(obj, MutableMapping):  # pragma: nocover
+            raise TypeError(f"Mapping is not mutable: {type(obj)}")
+        if not create and key not in obj:
+            raise KeyError(f'Key "{key}" not in Mapping!')
+        obj[key] = value
+        return
+
+    if isinstance(obj, Sequence) and not isinstance(obj, str):
+        if not isinstance(obj, MutableSequence):
+            raise TypeError(f"Sequence is not mutable: {type(obj)}")
+        try:
+            idx = int(key)
+        except (ValueError, TypeError):
+            raise KeyError("Sequences need integer indices only.")
+        if create:
+            _fill_sequence(obj, idx, path, path_index)
+        obj[idx] = value
+        return
+
+    raise TypeError(f"Cannot set anything on type {type(obj)}!")
 
 
 def path_set(obj, path, value, **options):
@@ -159,86 +237,7 @@ def path_set(obj, path, value, **options):
     last = len(path) - 1
 
     for i in range(last):
-        key = path[i]
-        if type(obj) not in _DICT_LIST:
-            return _path_set_abc(root, path, value, create=create)
-        if type(obj) is dict:
-            if key not in obj:
-                if not create:
-                    raise KeyError(f'Key "{key}" not in Mapping!')
-                next_key = path[i + 1]
-                obj[key] = [] if type(next_key) is int else {}
-            obj = obj[key]
-        else:
-            try:
-                idx = int(key)
-            except (ValueError, TypeError):
-                raise KeyError("Sequences need integer indices only.")
-            if create:
-                _fill_sequence(obj, idx, path, i)
-                if obj[idx] is None:
-                    next_key = path[i + 1]
-                    obj[idx] = [] if type(next_key) is int else {}
-            obj = obj[idx]
+        obj = _step_set_descend(obj, path[i], path, i, create)
 
-    final = path[last]
-    if type(obj) not in _DICT_LIST:
-        return _path_set_abc(root, path, value, create=create)
-    if type(obj) is dict:
-        if not create and final not in obj:
-            raise KeyError(f'Key "{final}" not in Mapping!')
-        obj[final] = value
-    else:
-        try:
-            idx = int(final)
-        except (ValueError, TypeError):
-            raise KeyError("Sequences need integer indices only.")
-        if create:
-            _fill_sequence(obj, idx, path, last)
-        obj[idx] = value
-
+    _step_set_final(obj, path[last], value, path, last, create)
     return root
-
-
-def _path_set_abc(obj, path, value, create=False):
-    """Fallback path_set for non-dict/list types using ABC checks."""
-    from collections.abc import Sequence, MutableSequence, Mapping, MutableMapping
-
-    if path is not None and not isinstance(path, Sequence):
-        raise TypeError(f"Path is a {type(path)}, but must be None or a Collection!")
-
-    if len(path) < 1:
-        raise KeyError("Cannot set with an empty path!")
-
-    if isinstance(obj, Mapping):
-        if not isinstance(obj, MutableMapping):  # pragma: nocover
-            raise TypeError(f"Mapping is not mutable: {type(obj)}")
-        if len(path) == 1:
-            if not create and path[0] not in obj:
-                raise KeyError(f'Key "{path[0]}" not in Mapping!')
-            obj[path[0]] = value
-        else:
-            if create and path[0] not in obj:
-                if type(path[1]) == int:
-                    obj[path[0]] = []
-                else:
-                    obj[path[0]] = {}
-            _path_set_abc(obj[path[0]], path[1:], value, create=create)
-        return obj
-
-    elif isinstance(obj, Sequence):
-        if not isinstance(obj, MutableSequence):
-            raise TypeError(f"Sequence is not mutable: {type(obj)}")
-        try:
-            idx = int(path[0])
-        except ValueError:
-            raise KeyError("Sequences need integer indices only.")
-        if create:
-            _fill_sequence(obj, idx, path, 0)
-        if len(path) == 1:
-            obj[idx] = value
-        else:
-            _path_set_abc(obj[idx], path[1:], value, create=create)
-        return obj
-    else:
-        raise TypeError(f"Cannot set anything on type {type(obj)}!")
