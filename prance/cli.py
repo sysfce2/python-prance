@@ -24,7 +24,14 @@ def __write_to_file(filename, specs):  # noqa: N802
     fs.write_file(filename, contents)
 
 
-def __parser_for_url(url, resolve, backend, strict, encoding):  # noqa: N802
+def __parser_for_url(  # noqa: N802
+    url: str,
+    resolve: bool,
+    backend: str,
+    strict: bool,
+    encoding: str | None,
+    allow_recursion: bool = False,
+) -> tuple:
     """Return a parser instance for the URL and the given parameters."""
     # Try the URL
     formatted = click.format_filename(url)
@@ -42,9 +49,15 @@ def __parser_for_url(url, resolve, backend, strict, encoding):  # noqa: N802
     parser = None
     if resolve:
         click.echo(" -> Resolving external references.")
-        parser = prance.ResolvingParser(
-            url, lazy=True, backend=backend, strict=strict, encoding=encoding
+        kwargs: dict = dict(
+            lazy=True, backend=backend, strict=strict, encoding=encoding
         )
+        if allow_recursion:
+            from prance.util.resolver import keep_ref_on_recursion
+
+            kwargs["recursion_limit_handler"] = keep_ref_on_recursion
+            click.echo(" -> Allowing recursive references (will be kept as $ref).")
+        parser = prance.ResolvingParser(url, **kwargs)
     else:
         click.echo(" -> Not resolving external references.")
         parser = prance.BaseParser(
@@ -144,12 +157,19 @@ class GroupWithCommandOptions(click.Group):
     help="If given, override file encoding detection and use the given "
     "encoding for all files. Does not work on remote URLs.",
 )
+@click.option(
+    "--allow-recursion/--no-allow-recursion",
+    default=False,
+    help="When resolving, keep recursive $ref entries in place instead of "
+    "raising an error. Useful for specs with self-referencing schemas.",
+)
 @click.pass_context
-def backend_options(ctx, resolve, backend, strict, encoding):
+def backend_options(ctx, resolve, backend, strict, encoding, allow_recursion):
     ctx.obj["resolve"] = resolve
     ctx.obj["backend"] = backend
     ctx.obj["strict"] = strict
     ctx.obj["encoding"] = encoding
+    ctx.obj["allow_recursion"] = allow_recursion
 
 
 @backend_options.command()
@@ -203,6 +223,7 @@ def validate(ctx, output_file, urls):
             ctx.obj["backend"],
             ctx.obj["strict"],
             ctx.obj["encoding"],
+            ctx.obj["allow_recursion"],
         )
 
         # Try parsing
@@ -243,6 +264,7 @@ def compile(ctx, url_or_path, output_file):
         ctx.obj["backend"],
         ctx.obj["strict"],
         ctx.obj["encoding"],
+        ctx.obj["allow_recursion"],
     )
 
     # Try parsing
