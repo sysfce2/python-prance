@@ -743,3 +743,42 @@ def test_resolve_package_ref(mock_get):
         res.specs, ("paths", "/pets/{petId}", "get", "responses", "203", "schema")
     )
     assert "required" in val
+
+
+def test_keep_ref_on_recursion():
+    specs = get_specs("tests/specs/self_recursive.yaml")
+    res = resolver.RefResolver(
+        specs,
+        fs.abspath("tests/specs/self_recursive.yaml"),
+        recursion_limit_handler=resolver.keep_ref_on_recursion,
+    )
+    res.resolve_references()
+
+    from prance.util.path import path_get
+
+    file_def = path_get(res.specs, ("definitions", "File"))
+    # reclimit=1: File is resolved once, the recursive parent inside
+    # that resolved copy keeps its $ref
+    inner_parent = path_get(file_def, ("properties", "parent", "properties", "parent"))
+    assert "$ref" in inner_parent
+    assert inner_parent["$ref"] == "#/definitions/File"
+
+
+def test_permissive_object_on_recursion():
+    specs = get_specs("tests/specs/self_recursive.yaml")
+    res = resolver.RefResolver(
+        specs,
+        fs.abspath("tests/specs/self_recursive.yaml"),
+        recursion_limit_handler=resolver.permissive_object_on_recursion,
+    )
+    res.resolve_references()
+
+    from prance.util.path import path_get
+
+    file_def = path_get(res.specs, ("definitions", "File"))
+    # reclimit=1: File is resolved once, the recursive parent inside
+    # that resolved copy gets the permissive object
+    inner_parent = path_get(file_def, ("properties", "parent", "properties", "parent"))
+    assert inner_parent["type"] == "object"
+    assert inner_parent["additionalProperties"] is True
+    assert "x-recursive-ref" in inner_parent

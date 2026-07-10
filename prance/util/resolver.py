@@ -127,6 +127,19 @@ def keep_ref_on_recursion(limit, parsed_url, recursions=()):
     return KEEP_REF
 
 
+def permissive_object_on_recursion(limit, parsed_url, recursions=()):
+    """Replace recursive ``$ref`` with a permissive object schema.
+
+    The replacement allows any attributes and tags the original
+    reference via the ``x-recursive-ref`` extension key.
+    """
+    return {
+        "type": "object",
+        "additionalProperties": True,
+        "x-recursive-ref": parsed_url.geturl(),
+    }
+
+
 # -- Ref-key: a hashable identifier for a unique $ref target -----------
 # Tuple of (url_resource_string, tuple_of_obj_path_parts).
 
@@ -415,6 +428,8 @@ class RefResolver:
 
             # Build the recursion chain for this specific dependency
             chain = self._build_recursion_chain(rk, dep_key, dep_sites, resolved)
+            if chain is KEEP_REF:
+                continue
             resolved[dep_key] = chain
 
             # Now substitute the chain into raw
@@ -444,7 +459,7 @@ class RefResolver:
 
         handler_value = self.__reclimit_handler(self.__reclimit, dep_url, recursions)
         if isinstance(handler_value, _KeepRef):
-            handler_value = None
+            return KEEP_REF
 
         # We need the raw template for the dep_key target.  If dep_key
         # is the same as parent_key (self-reference), we need to re-fetch
