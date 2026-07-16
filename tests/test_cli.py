@@ -116,6 +116,27 @@ def test_validate_output(runner):
 
 
 @pytest.mark.skipif(none_of("click"), reason="Click does not exist")
+def test_validate_recursive_fails_by_default(runner):
+    from prance import cli
+
+    result = runner.invoke(cli.validate, ["tests/specs/self_recursive.yaml"])
+    assert result.exit_code == 1
+    assert "ResolutionError" in result.output
+
+
+@pytest.mark.skipif(none_of("click"), reason="Click does not exist")
+def test_validate_recursive_with_allow_recursion(runner):
+    from prance import cli
+
+    result = runner.invoke(
+        cli.validate, ["--allow-recursion", "tests/specs/self_recursive.yaml"]
+    )
+    assert result.exit_code == 0
+    assert "Allowing recursive references" in result.output
+    assert "Validates OK" in result.output
+
+
+@pytest.mark.skipif(none_of("click"), reason="Click does not exist")
 def test_compile_defaults(runner):
     from prance import cli
 

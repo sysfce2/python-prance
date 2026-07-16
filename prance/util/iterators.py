@@ -60,6 +60,9 @@ def reference_iterator(specs, path=()):
     """
     Iterate through the given specs, returning only references.
 
+    Uses ``isinstance`` so that dict/list subclasses (e.g. ruamel.yaml's
+    ``CommentedMap``/``CommentedSeq``) are handled correctly.
+
     The iterator returns three values:
       - The key, mimicking the behaviour of other iterators, although
         it will always equal '$ref'
@@ -72,12 +75,20 @@ def reference_iterator(specs, path=()):
     :return: An iterator over all references in the specs.
     :rtype: iterator
     """
-    # We need to iterate through the nested specification dict, so let's
-    # start with an appropriate iterator. We can immediately optimize it by
-    # only returning '$ref' items.
-    for item_path, item in item_iterator(specs, path):
-        if len(item_path) <= 0:
-            continue
-        key = item_path[-1]
-        if key == "$ref":
-            yield key, item, item_path[:-1]
+    stack = [(path, specs)]
+    while stack:
+        current_path, value = stack.pop()
+        if isinstance(value, dict):
+            children = []
+            for key, item in value.items():
+                if key == "$ref":
+                    yield "$ref", item, current_path
+                elif isinstance(item, (dict, list, tuple)):
+                    children.append((current_path + (key,), item))
+            stack.extend(reversed(children))
+        elif isinstance(value, (list, tuple)):
+            children = []
+            for idx, item in enumerate(value):
+                if isinstance(item, (dict, list, tuple)):
+                    children.append((current_path + (idx,), item))
+            stack.extend(reversed(children))
