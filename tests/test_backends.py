@@ -171,6 +171,18 @@ def test_openapi_spec_validator_accepts_openapi_31():
 
 
 @pytest.mark.skipif(
+    none_of("openapi-spec-validator"),
+    reason="Missing dependencies: openapi-spec-validator",
+)
+def test_openapi_spec_validator_accepts_openapi_32():
+    parser = BaseParser(
+        "tests/specs/openapi_3_2_minimal.yaml", backend="openapi-spec-validator"
+    )
+    assert parser.valid
+    assert parser.version_parsed == (3, 2, 0)
+
+
+@pytest.mark.skipif(
     none_of("flex"),
     reason="Missing dependencies: flex",
 )

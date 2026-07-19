@@ -6,9 +6,9 @@ See https://openapis.org/ for details on the specification.
 Included is a BaseParser that reads and validates swagger specs, and a
 ResolvingParser that additionally resolves any $ref references.
 
-OpenAPI 3.1 validation requires the ``openapi-spec-validator`` backend
-(the recommended default). The ``flex`` and ``swagger-spec-validator``
-backends only support Swagger/OpenAPI 2.0.
+OpenAPI 3.1 and 3.2 validation requires the ``openapi-spec-validator``
+backend (the recommended default). The ``flex`` and
+``swagger-spec-validator`` backends only support Swagger/OpenAPI 2.0.
 """
 
 __author__ = "Jens Finkhaeuser"

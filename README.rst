@@ -5,7 +5,7 @@
 Prance provides parsers for `Swagger/OpenAPI
 2.0 and 3.x <https://spec.openapis.org/>`__ API specifications in Python.
 It uses `openapi\_spec\_validator <https://github.com/python-openapi/openapi-spec-validator>`__
-(recommended; OpenAPI 2.0 / 3.0 / 3.1), or optionally
+(recommended; OpenAPI 2.0 / 3.0 / 3.1 / 3.2), or optionally
 `swagger\_spec\_validator <https://github.com/Yelp/swagger_spec_validator>`__
 or `flex <https://github.com/pipermerriam/flex>`__ (Swagger 2.0 only),
 to validate specifications, but additionally resolves `JSON
@@ -156,7 +156,7 @@ installed, prance prefers ``openapi-spec-validator``, then
 +------------------------+-----------------+-------------+----------------------------------------------------------------------------------+----------------+-----------------------------------------------------------------------------------+
 | Backend                | OpenAPI Version | Strict Mode | Notes                                                                            | Available From | Link                                                                              |
 +========================+=================+=============+==================================================================================+================+===================================================================================+
-| openapi-spec-validator | 2.0, 3.0, 3.1   | yes         | **Recommended.** Actively maintained; required for OpenAPI 3.x.                  | prance 0.11    | `openapi\_spec\_validator <https://github.com/python-openapi/openapi-spec-validator>`__ |
+| openapi-spec-validator | 2.0, 3.0–3.2   | yes         | **Recommended.** Actively maintained; required for OpenAPI 3.x.                  | prance 0.11    | `openapi\_spec\_validator <https://github.com/python-openapi/openapi-spec-validator>`__ |
 +------------------------+-----------------+-------------+----------------------------------------------------------------------------------+----------------+-----------------------------------------------------------------------------------+
 | swagger-spec-validator | 2.0 only        | yes         | Still usable for Swagger 2.0; last release 2024; does not accept integer keys.   | prance 0.1     | `swagger\_spec\_validator <https://github.com/Yelp/swagger_spec_validator>`__     |
 +------------------------+-----------------+-------------+----------------------------------------------------------------------------------+----------------+-----------------------------------------------------------------------------------+

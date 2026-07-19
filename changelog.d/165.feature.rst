@@ -1,0 +1,2 @@
+Add OpenAPI 3.2 support by requiring ``openapi-spec-validator>=0.8.5``
+(pinned to ``~=0.9.0``), which can detect and validate 3.2 specs. (#165)
