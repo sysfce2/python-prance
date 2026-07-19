@@ -186,9 +186,10 @@ def test_openapi_spec_validator_accepts_openapi_31_features():
     assert item["properties"]["name"]["type"] == ["string", "null"]
     assert item["properties"]["score"]["exclusiveMinimum"] == 0
     # $ref siblings and reusable path items
-    assert "description" in parser.specification["components"]["schemas"][
-        "ItemRefWithSiblings"
-    ]
+    assert (
+        "description"
+        in parser.specification["components"]["schemas"]["ItemRefWithSiblings"]
+    )
     assert "Health" in parser.specification["components"]["pathItems"]
 
 
@@ -305,6 +306,4 @@ def test_openapi_spec_validator_backend_is_not_deprecated():
         BaseParser(
             "tests/specs/petstore.yaml", backend="openapi-spec-validator", lazy=True
         )
-    assert not [
-        w for w in caught if issubclass(w.category, DeprecationWarning)
-    ]
+    assert not [w for w in caught if issubclass(w.category, DeprecationWarning)]
