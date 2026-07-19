@@ -26,7 +26,8 @@ Misc
 - Update GitHub Actions to use latest action versions: checkout@v4, setup-python@v5
 - Update build dependencies: setuptools to >80, setuptools_scm to >9
 - Update core dependencies: ruamel.yaml to 0.18.16, requests to 2.32.5, packaging to 25.0
-- Update dev dependencies: tox to 4.32.0, pytest to 9.0.1, pytest-cov to 7.0.0, sphinx to 8.2.3, towncrier to 25.8.0, click to 8.3.0
+- Update dev dependencies: tox to 4.32.0, pytest to 9.0.1, pytest-cov to 7.0.0, towncrier to 25.8.0
+- Update optional CLI dependency: click to 8.3.0
 - Update pre-commit configuration to use --py310-plus for pyupgrade and reorder-python-imports
 - Use dependency groups in tox configuration instead of manually specifying deps
 - Use pip --group flag to install dev dependency group in CI
