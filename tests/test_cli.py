@@ -116,6 +116,30 @@ def test_validate_output(runner):
 
 
 @pytest.mark.skipif(none_of("click"), reason="Click does not exist")
+def test_validate_from_stdin(runner):
+    from prance import cli
+
+    with open("tests/specs/petstore.yaml", encoding="utf-8") as f:
+        content = f.read()
+
+    result = runner.invoke(cli.validate, ["-"], input=content)
+    assert result.exit_code == 0
+    assert 'Processing "-" (stdin)...' in result.output
+    assert "Validates OK as Swagger/OpenAPI 2.0!" in result.output
+
+
+@pytest.mark.skipif(none_of("click"), reason="Click does not exist")
+def test_validate_stdin_cannot_combine_with_paths(runner):
+    from prance import cli
+
+    result = runner.invoke(
+        cli.validate, ["-", "tests/specs/petstore.yaml"], input="openapi: 3.0.0\n"
+    )
+    assert result.exit_code == 2
+    assert "cannot be combined" in result.output
+
+
+@pytest.mark.skipif(none_of("click"), reason="Click does not exist")
 def test_validate_recursive_fails_by_default(runner):
     from prance import cli
 

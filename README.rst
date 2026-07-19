@@ -123,6 +123,24 @@ URLs can also be parsed:
 
     parser = ResolvingParser('http://petstore.swagger.io/v2/swagger.json')
 
+Specs already held in memory can be validated via ``spec_string`` (mutually
+exclusive with a path or URL):
+
+.. code:: python
+
+    from prance import BaseParser
+
+    parser = BaseParser(spec_string=openapi_yaml_or_json_text)
+    parser.valid  # True if the backend accepted the spec
+
+From the CLI, pass ``-`` to read a spec from stdin (Click's usual
+dash-means-stdin convention):
+
+.. code:: bash
+
+    $ cat path/to/swagger.yml | prance validate -
+    $ prance validate - < path/to/swagger.yml
+
 Largely, that's it. There is a whole slew of utility code that you may
 or may not find useful, too. Look at the `full documentation
 <https://prance.readthedocs.io/en/latest/#api-modules>`__ for details.
