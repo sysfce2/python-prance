@@ -1,7 +1,0 @@
-Speed up reference resolution with pure Python optimizations:
-structural sharing for O(N) chained ``$ref`` resolution (was O(N^2)),
-resolved-reference caching, optimized iterators and path functions,
-optional ``orjson`` fast deepcopy (``prance[fast]``),
-``keep_ref_on_recursion`` handler to preserve ``$ref`` on recursion,
-``materialize=True`` option for independent subtree copies,
-and a fix for ``path_get`` returning ``defaultvalue`` for falsy values.
