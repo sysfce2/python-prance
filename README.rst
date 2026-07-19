@@ -150,18 +150,21 @@ supported.
 *Backends*
 
 Different validation backends support different features. When more than one is
-installed, prance prefers ``openapi-spec-validator``, then
-``swagger-spec-validator``, then ``flex``.
+installed, prance prefers ``openapi-spec-validator``, then the deprecated
+``swagger-spec-validator``, then deprecated ``flex``.
 
 +------------------------+-----------------+-------------+----------------------------------------------------------------------------------+----------------+-----------------------------------------------------------------------------------+
 | Backend                | OpenAPI Version | Strict Mode | Notes                                                                            | Available From | Link                                                                              |
 +========================+=================+=============+==================================================================================+================+===================================================================================+
 | openapi-spec-validator | 2.0, 3.0–3.2   | yes         | **Recommended.** Actively maintained; required for OpenAPI 3.x.                  | prance 0.11    | `openapi\_spec\_validator <https://github.com/python-openapi/openapi-spec-validator>`__ |
 +------------------------+-----------------+-------------+----------------------------------------------------------------------------------+----------------+-----------------------------------------------------------------------------------+
-| swagger-spec-validator | 2.0 only        | yes         | Still usable for Swagger 2.0; last release 2024; does not accept integer keys.   | prance 0.1     | `swagger\_spec\_validator <https://github.com/Yelp/swagger_spec_validator>`__     |
+| swagger-spec-validator | 2.0 only        | yes         | **Deprecated.** Swagger 2.0 only; emits ``DeprecationWarning`` when selected.  | prance 0.1     | `swagger\_spec\_validator <https://github.com/Yelp/swagger_spec_validator>`__     |
 +------------------------+-----------------+-------------+----------------------------------------------------------------------------------+----------------+-----------------------------------------------------------------------------------+
-| flex                   | 2.0 only        | n/a         | Unmaintained since 2019; insecure/outdated deps. Use at your own risk.           | prance 0.8     | `flex <https://github.com/pipermerriam/flex>`__                                   |
+| flex                   | 2.0 only        | n/a         | **Deprecated.** Unmaintained since 2019; insecure/outdated deps.               | prance 0.8     | `flex <https://github.com/pipermerriam/flex>`__                                   |
 +------------------------+-----------------+-------------+----------------------------------------------------------------------------------+----------------+-----------------------------------------------------------------------------------+
+
+The ``[ssv]`` and ``[flex]`` extras are likewise deprecated; install ``prance[osv]``
+instead. Selecting a deprecated backend raises ``DeprecationWarning``.
 
 You can select the backend in the constructor of the parser(s):
 
@@ -177,12 +180,6 @@ they can be used:
 
     $ pip install 'prance[osv]'
     $ prance validate --backend=openapi-spec-validator path/to/spec.yml
-
-*A note on flex usage:* While flex is the fastest validation backend, unfortunately it is no longer
-maintained and there are issues with its dependencies. For one thing, it depends on a version of `PyYAML`
-that contains security flaws. For another, it depends explicitly on older versions of `click`.
-It also cannot validate OpenAPI 3.x specs. If you use the flex subpackage, therefore, you do so
-at your own risk.
 
 *Compatibility*
 

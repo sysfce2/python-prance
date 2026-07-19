@@ -32,8 +32,8 @@ def validation_backends():
     """Return a list of validation backends supported by the environment.
 
     Preference order favours actively maintained backends that support
-    modern OpenAPI versions: openapi-spec-validator, then
-    swagger-spec-validator (Swagger 2.0 only), then flex (unmaintained).
+    modern OpenAPI versions: openapi-spec-validator, then the deprecated
+    swagger-spec-validator (Swagger 2.0 only), then deprecated flex.
     """
     ret = []
 
@@ -66,7 +66,7 @@ def default_validation_backend():
     backends = validation_backends()
     if len(backends) <= 0:  # pragma: nocover
         raise RuntimeError(
-            "No validation backend available! Install one of "
-            '"openapi-spec-validator", "swagger-spec-validator" or "flex".'
+            "No validation backend available! Install "
+            '"openapi-spec-validator" (prance[osv]).'
         )
     return backends[0]

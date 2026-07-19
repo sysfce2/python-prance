@@ -19,6 +19,7 @@ def test_bad_backend():
         BaseParser("tests/specs/petstore.yaml", backend="does_not_exist")
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 @pytest.mark.skipif(none_of("flex"), reason="Missing dependencies: flex")
 def test_flex_issue_5_integer_keys():
     # Must succeed with default (flex) parser; note the parser does not stringify the response code
@@ -26,17 +27,20 @@ def test_flex_issue_5_integer_keys():
     assert 200 in parser.specification["paths"]["/test"]["post"]["responses"]
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 @pytest.mark.skipif(none_of("flex"), reason="Missing dependencies: flex")
 def test_flex_validate_success():
     parser = BaseParser("tests/specs/petstore.yaml", backend="flex")
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 @pytest.mark.skipif(none_of("flex"), reason="Missing dependencies: flex")
 def test_flex_validate_failure():
     with pytest.raises(ValidationError):
         parser = BaseParser("tests/specs/missing_reference.yaml", backend="flex")
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 @pytest.mark.skipif(
     none_of("swagger-spec-validator"),
     reason="Missing dependencies: swagger-spec-validator",
@@ -59,6 +63,7 @@ def test_swagger_spec_validator_issue_5_integer_keys():
     assert "200" in parser.specification["paths"]["/test"]["post"]["responses"]
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 @pytest.mark.skipif(
     none_of("swagger-spec-validator"),
     reason="Missing dependencies: swagger-spec-validator",
@@ -67,6 +72,7 @@ def test_swagger_spec_validator_validate_success():
     parser = BaseParser("tests/specs/petstore.yaml", backend="swagger-spec-validator")
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 @pytest.mark.skipif(
     none_of("swagger-spec-validator"),
     reason="Missing dependencies: swagger-spec-validator",
@@ -242,6 +248,7 @@ def test_openapi_32_features_rejected_as_openapi_31():
         BaseParser(spec_string=raw, backend="openapi-spec-validator")
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 @pytest.mark.skipif(
     none_of("flex"),
     reason="Missing dependencies: flex",
@@ -251,6 +258,7 @@ def test_flex_rejects_openapi_31():
         BaseParser("tests/specs/openapi_3_1_features.yaml", backend="flex")
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 @pytest.mark.skipif(
     none_of("swagger-spec-validator"),
     reason="Missing dependencies: swagger-spec-validator",
@@ -266,3 +274,37 @@ def test_validation_backends_prefer_osv():
     backends = validation_backends()
     if "openapi-spec-validator" in backends:
         assert backends[0] == "openapi-spec-validator"
+
+
+@pytest.mark.skipif(none_of("flex"), reason="Missing dependencies: flex")
+def test_flex_backend_emits_deprecation_warning():
+    with pytest.warns(DeprecationWarning, match="flex.*deprecated"):
+        BaseParser("tests/specs/petstore.yaml", backend="flex", lazy=True)
+
+
+@pytest.mark.skipif(
+    none_of("swagger-spec-validator"),
+    reason="Missing dependencies: swagger-spec-validator",
+)
+def test_swagger_spec_validator_backend_emits_deprecation_warning():
+    with pytest.warns(DeprecationWarning, match="swagger-spec-validator.*deprecated"):
+        BaseParser(
+            "tests/specs/petstore.yaml", backend="swagger-spec-validator", lazy=True
+        )
+
+
+@pytest.mark.skipif(
+    none_of("openapi-spec-validator"),
+    reason="Missing dependencies: openapi-spec-validator",
+)
+def test_openapi_spec_validator_backend_is_not_deprecated():
+    import warnings
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", DeprecationWarning)
+        BaseParser(
+            "tests/specs/petstore.yaml", backend="openapi-spec-validator", lazy=True
+        )
+    assert not [
+        w for w in caught if issubclass(w.category, DeprecationWarning)
+    ]

@@ -66,6 +66,7 @@ def iter_entries(parser, backend, version, file_format, path):
             absurl = url.absurl(os.path.abspath(full)).geturl()
             code = f"""
 @pytest.mark.xfail()
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 def {testcase_name}():
   import os
   cur = os.getcwd()
