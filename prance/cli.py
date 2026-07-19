@@ -140,9 +140,9 @@ class GroupWithCommandOptions(click.Group):
     default=default_validation_backend(),
     metavar="BACKEND",
     nargs=1,
-    help='The validation backend to use. One of "flex", '
-    '"swagger-spec-validator" or "openapi-spec-validator". The default'
-    "is the best of the installed backends.",
+    help='The validation backend to use. Prefer "openapi-spec-validator". '
+    '"swagger-spec-validator" and "flex" are deprecated. The default is '
+    "the best of the installed backends (preferring openapi-spec-validator).",
 )
 @click.option(
     "--strict/--no-strict",

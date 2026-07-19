@@ -1,0 +1,3 @@
+Declare OpenAPI 3.1 support with the ``openapi-spec-validator`` backend,
+prefer that backend by default when installed, and document current
+validator maintenance status. (#95)

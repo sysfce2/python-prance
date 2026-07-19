@@ -1,10 +1,15 @@
 """
-Prance implements parsers for Swagger/OpenAPI 2.0 and 3.0.0 API specs.
+Prance implements parsers for Swagger/OpenAPI 2.0 and 3.x API specs.
 
 See https://openapis.org/ for details on the specification.
 
 Included is a BaseParser that reads and validates swagger specs, and a
 ResolvingParser that additionally resolves any $ref references.
+
+OpenAPI 3.1 and 3.2 validation requires the ``openapi-spec-validator``
+backend (the recommended default). The ``flex`` and
+``swagger-spec-validator`` backends are deprecated, support only
+Swagger/OpenAPI 2.0, and emit ``DeprecationWarning`` when selected.
 """
 
 __author__ = "Jens Finkhaeuser"
@@ -52,6 +57,10 @@ class BaseParser(mixins.YAMLMixin, mixins.JSONMixin):
         "openapi-spec-validator": ((2, 3), "_validate_openapi_spec_validator"),
     }
 
+    # Deprecated backends remain available for Swagger 2.0, but emit
+    # DeprecationWarning when selected. Prefer openapi-spec-validator.
+    DEPRECATED_BACKENDS = frozenset({"flex", "swagger-spec-validator"})
+
     SPEC_VERSION_2_PREFIX = "Swagger/OpenAPI"
     SPEC_VERSION_3_PREFIX = "OpenAPI"
 
@@ -66,8 +75,8 @@ class BaseParser(mixins.YAMLMixin, mixins.JSONMixin):
         :param str spec_string: The specifications to parse.
         :param bool lazy: If true, do not load or parse anything. Instead wait for
           the parse function to be invoked.
-        :param str backend: [optional] one of 'flex', 'swagger-spec-validator' or
-          'openapi-spec-validator'.
+        :param str backend: [optional] one of 'openapi-spec-validator',
+          'swagger-spec-validator' (deprecated) or 'flex' (deprecated).
           Determines the validation backend to use. Defaults to the first installed
           backend in the ordered list obtained from util.validation_backends().
         :param bool strict: [optional] Applies only to the 'swagger-spec-validator'
@@ -111,6 +120,16 @@ class BaseParser(mixins.YAMLMixin, mixins.JSONMixin):
         if self.backend not in BaseParser.BACKENDS.keys():
             raise ValueError(
                 f"Backend may only be one of {BaseParser.BACKENDS.keys()}!"
+            )
+        if self.backend in BaseParser.DEPRECATED_BACKENDS:
+            import warnings
+
+            warnings.warn(
+                f'The "{self.backend}" validation backend is deprecated and '
+                "will be removed in a future release. Use "
+                '"openapi-spec-validator" instead (prance[osv]).',
+                DeprecationWarning,
+                stacklevel=2,
             )
 
         # Start parsing if lazy mode is not requested.

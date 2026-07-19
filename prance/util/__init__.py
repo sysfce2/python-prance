@@ -29,15 +29,13 @@ def stringify_keys(data):
 
 
 def validation_backends():
-    """Return a list of validation backends supported by the environment."""
+    """Return a list of validation backends supported by the environment.
+
+    Preference order favours actively maintained backends that support
+    modern OpenAPI versions: openapi-spec-validator, then the deprecated
+    swagger-spec-validator (Swagger 2.0 only), then deprecated flex.
+    """
     ret = []
-
-    try:
-        import flex  # noqa: F401
-
-        ret.append("flex")  # pragma: nocover
-    except (ImportError, SyntaxError):  # pragma: nocover
-        pass
 
     try:
         import openapi_spec_validator  # noqa: F401
@@ -53,6 +51,13 @@ def validation_backends():
     except (ImportError, SyntaxError):  # pragma: nocover
         pass
 
+    try:
+        import flex  # noqa: F401
+
+        ret.append("flex")  # pragma: nocover
+    except (ImportError, SyntaxError):  # pragma: nocover
+        pass
+
     return tuple(ret)
 
 
@@ -61,7 +66,7 @@ def default_validation_backend():
     backends = validation_backends()
     if len(backends) <= 0:  # pragma: nocover
         raise RuntimeError(
-            "No validation backend available! Install one of "
-            '"flex", "openapi-spec-validator" or "swagger-spec-validator".'
+            "No validation backend available! Install "
+            '"openapi-spec-validator" (prance[osv]).'
         )
     return backends[0]

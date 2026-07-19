@@ -1,0 +1,69 @@
+# Exercises OpenAPI 3.2-only constructs (invalid under 3.1):
+# - top-level $self
+# - server name
+# - tag summary / parent / kind
+# - query HTTP method
+# - in: querystring parameters
+# - itemSchema for sequential media types
+# - example dataValue / serializedValue
+# - oauth2 deviceAuthorization flow
+openapi: "3.2.0"
+$self: https://example.com/openapi.yaml
+info:
+  title: OpenAPI 3.2 features
+  version: "1.0.0"
+servers:
+  - name: Production
+    url: https://api.example.com
+tags:
+  - name: root
+    summary: Root tag
+    kind: nav
+  - name: search
+    summary: Search
+    parent: root
+    kind: nav
+paths:
+  /search:
+    query:
+      tags: [search]
+      operationId: searchItems
+      parameters:
+        - name: filter
+          in: querystring
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  q:
+                    type: string
+      responses:
+        "200":
+          summary: Stream of results
+          description: JSON Lines stream
+          content:
+            application/jsonl:
+              itemSchema:
+                type: object
+                required: [id]
+                properties:
+                  id:
+                    type: string
+              examples:
+                one:
+                  summary: one row
+                  dataValue:
+                    id: "1"
+                  serializedValue: |
+                    {"id":"1"}
+components:
+  securitySchemes:
+    deviceAuth:
+      type: oauth2
+      flows:
+        deviceAuthorization:
+          deviceAuthorizationUrl: https://auth.example.com/device
+          tokenUrl: https://auth.example.com/token
+          scopes:
+            read: Read access

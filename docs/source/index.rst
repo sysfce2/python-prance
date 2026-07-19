@@ -6,7 +6,7 @@
 Documentation of prance |release|
 ============================================
 
-Swagger/OpenAPI 2.0 Parser for Python
+Swagger/OpenAPI 2.0 and 3.x Parser for Python
 
 .. include:: ../../README.rst
 
