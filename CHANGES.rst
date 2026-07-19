@@ -1,3 +1,37 @@
+Prance 26.07.19.0
+=================
+
+Features
+--------
+
+- Add ``--allow-recursion`` CLI flag to ``validate`` and ``compile`` commands,
+  allowing specs with self-referencing ``$ref`` (e.g. recursive types like
+  linked lists or trees) to be processed without raising ``ResolutionError``. (#124)
+- Speed up reference resolution with pure Python optimizations:
+  structural sharing for O(N) chained ``$ref`` resolution (was O(N^2)),
+  resolved-reference caching, optimized iterators and path functions,
+  optional ``orjson`` fast deepcopy (``prance[fast]``),
+  ``keep_ref_on_recursion`` handler to preserve ``$ref`` on recursion,
+  ``materialize=True`` option for independent subtree copies,
+  and a fix for ``path_get`` returning ``defaultvalue`` for falsy values. (#169)
+- Add Python 3.14 support to classifiers, CI, and tox
+
+
+Misc
+----
+
+- Fix sphinx version constraint to <8.2 as 8.2+ requires Python 3.11+
+- Migrate project metadata to pyproject.toml and convert dev dependencies to PEP 735 dependency group
+- Remove obsolete requirements files and appveyor.yml, update docs with modern installation instructions
+- Update GitHub Actions to use latest action versions: checkout@v4, setup-python@v5
+- Update build dependencies: setuptools to >80, setuptools_scm to >9
+- Update core dependencies: ruamel.yaml to 0.18.16, requests to 2.32.5, packaging to 25.0
+- Update dev dependencies: tox to 4.32.0, pytest to 9.0.1, pytest-cov to 7.0.0, sphinx to 8.2.3, towncrier to 25.8.0, click to 8.3.0
+- Update pre-commit configuration to use --py310-plus for pyupgrade and reorder-python-imports
+- Use dependency groups in tox configuration instead of manually specifying deps
+- Use pip --group flag to install dev dependency group in CI
+
+
 Prance 25.04.08.0
 ==================
 
