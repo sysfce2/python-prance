@@ -156,3 +156,41 @@ def test_openapi_spec_validator_issue_20_spec_version_handling():
     # detected.
     assert not parser.valid
     assert parser.version_parsed == (3, 0, 0)
+
+
+@pytest.mark.skipif(
+    none_of("openapi-spec-validator"),
+    reason="Missing dependencies: openapi-spec-validator",
+)
+def test_openapi_spec_validator_accepts_openapi_31():
+    parser = BaseParser(
+        "tests/specs/openapi_3_1_minimal.yaml", backend="openapi-spec-validator"
+    )
+    assert parser.valid
+    assert parser.version_parsed == (3, 1, 0)
+
+
+@pytest.mark.skipif(
+    none_of("flex"),
+    reason="Missing dependencies: flex",
+)
+def test_flex_rejects_openapi_31():
+    with pytest.raises(ValidationError, match="Version mismatch"):
+        BaseParser("tests/specs/openapi_3_1_minimal.yaml", backend="flex")
+
+
+@pytest.mark.skipif(
+    none_of("swagger-spec-validator"),
+    reason="Missing dependencies: swagger-spec-validator",
+)
+def test_swagger_spec_validator_rejects_openapi_31():
+    with pytest.raises(ValidationError, match="Version mismatch"):
+        BaseParser(
+            "tests/specs/openapi_3_1_minimal.yaml", backend="swagger-spec-validator"
+        )
+
+
+def test_validation_backends_prefer_osv():
+    backends = validation_backends()
+    if "openapi-spec-validator" in backends:
+        assert backends[0] == "openapi-spec-validator"
