@@ -1,0 +1,2 @@
+Document ``spec_string`` for in-memory validation and accept ``-`` on
+``prance validate`` to read a spec from stdin. (#157)

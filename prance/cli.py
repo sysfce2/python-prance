@@ -24,6 +24,43 @@ def __write_to_file(filename, specs):  # noqa: N802
     fs.write_file(filename, contents)
 
 
+def __parser_kwargs(  # noqa: N802
+    resolve: bool,
+    backend: str,
+    strict: bool,
+    encoding: str | None,
+    allow_recursion: bool = False,
+) -> dict:
+    """Build common parser kwargs and echo resolve-related messages."""
+    kwargs: dict = dict(lazy=True, backend=backend, strict=strict, encoding=encoding)
+    if resolve:
+        click.echo(" -> Resolving external references.")
+        if allow_recursion:
+            from prance.util.resolver import keep_ref_on_recursion
+
+            kwargs["recursion_limit_handler"] = keep_ref_on_recursion
+            click.echo(" -> Allowing recursive references (will be kept as $ref).")
+    else:
+        click.echo(" -> Not resolving external references.")
+    return kwargs
+
+
+def __make_parser(  # noqa: N802
+    *,
+    url: str | None = None,
+    spec_string: str | None = None,
+    resolve: bool,
+    backend: str,
+    strict: bool,
+    encoding: str | None,
+    allow_recursion: bool = False,
+):
+    """Return a BaseParser or ResolvingParser for a URL or in-memory spec."""
+    kwargs = __parser_kwargs(resolve, backend, strict, encoding, allow_recursion)
+    klass = prance.ResolvingParser if resolve else prance.BaseParser
+    return klass(url=url, spec_string=spec_string, **kwargs)
+
+
 def __parser_for_url(  # noqa: N802
     url: str,
     resolve: bool,
@@ -45,28 +82,37 @@ def __parser_for_url(  # noqa: N802
     if os.path.exists(fs.from_posix(fsurl)):
         url = fsurl
 
-    # Create parser to use
-    parser = None
-    if resolve:
-        click.echo(" -> Resolving external references.")
-        kwargs: dict = dict(
-            lazy=True, backend=backend, strict=strict, encoding=encoding
-        )
-        if allow_recursion:
-            from prance.util.resolver import keep_ref_on_recursion
-
-            kwargs["recursion_limit_handler"] = keep_ref_on_recursion
-            click.echo(" -> Allowing recursive references (will be kept as $ref).")
-        parser = prance.ResolvingParser(url, **kwargs)
-    else:
-        click.echo(" -> Not resolving external references.")
-        parser = prance.BaseParser(
-            url, lazy=True, backend=backend, strict=strict, encoding=encoding
-        )
-
-    # XXX maybe enable this in debug mode or something.
-    # click.echo(' -> Using backend: {0.backend}'.format(parser))
+    parser = __make_parser(
+        url=url,
+        resolve=resolve,
+        backend=backend,
+        strict=strict,
+        encoding=encoding,
+        allow_recursion=allow_recursion,
+    )
     return parser, formatted
+
+
+def __parser_for_stdin(  # noqa: N802
+    resolve: bool,
+    backend: str,
+    strict: bool,
+    encoding: str | None,
+    allow_recursion: bool = False,
+) -> tuple:
+    """Return a parser instance for a spec read from stdin (``-``)."""
+    click.echo('Processing "-" (stdin)...')
+    stream = click.get_text_stream("stdin", encoding=encoding)
+    spec_string = stream.read()
+    parser = __make_parser(
+        spec_string=spec_string,
+        resolve=resolve,
+        backend=backend,
+        strict=strict,
+        encoding=encoding,
+        allow_recursion=allow_recursion,
+    )
+    return parser, "-"
 
 
 def __validate(parser, name):  # noqa: N802
@@ -187,13 +233,16 @@ def backend_options(ctx, resolve, backend, strict, encoding, allow_recursion):
 )
 @click.argument(
     "urls",
-    type=click.Path(exists=False),
+    type=click.Path(exists=False, allow_dash=True),
     nargs=-1,
 )
 @click.pass_context
 def validate(ctx, output_file, urls):
     """
     Validate the given spec or specs.
+
+    Pass ``-`` to read a single spec from stdin (same as Click's usual
+    dash-means-stdin convention).
 
     If the --resolve option is set, references will be resolved before
     validation.
@@ -213,18 +262,32 @@ def validate(ctx, output_file, urls):
         raise click.UsageError(
             "If --output-file is given, only one input URL " "is allowed!"
         )
+    if urls.count("-") > 1:
+        raise click.UsageError("stdin (-) can only be used once.")
+    if "-" in urls and len(urls) > 1:
+        raise click.UsageError(
+            "stdin (-) cannot be combined with other input URLs or paths."
+        )
 
     # Process files
     for url in urls:
-        # Create parser to use
-        parser, name = __parser_for_url(
-            url,
-            ctx.obj["resolve"],
-            ctx.obj["backend"],
-            ctx.obj["strict"],
-            ctx.obj["encoding"],
-            ctx.obj["allow_recursion"],
-        )
+        if url == "-":
+            parser, name = __parser_for_stdin(
+                ctx.obj["resolve"],
+                ctx.obj["backend"],
+                ctx.obj["strict"],
+                ctx.obj["encoding"],
+                ctx.obj["allow_recursion"],
+            )
+        else:
+            parser, name = __parser_for_url(
+                url,
+                ctx.obj["resolve"],
+                ctx.obj["backend"],
+                ctx.obj["strict"],
+                ctx.obj["encoding"],
+                ctx.obj["allow_recursion"],
+            )
 
         # Try parsing
         __validate(parser, name)
